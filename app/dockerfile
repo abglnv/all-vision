@@ -5,6 +5,6 @@ RUN pip install --upgrade pip && pip install uv
 WORKDIR /app
 COPY main.py ./ 
 COPY model.tflite ./ 
-RUN uv pip install --system "gradio==4.44.1" "pillow==10.4.0" "numpy==1.26.4" "pydantic==2.10.6" ai_edge_litert
+RUN uv pip install --system "gradio==4.44.1" "pillow==10.4.0" "numpy==1.26.4" "pydantic==2.10.6" onnx onnxruntime
 EXPOSE 7860
 CMD ["uv", "run", "python", "main.py"]
