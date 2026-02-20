@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAM Agent — Recurrent Attention Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── RESET & CSS VARS ─────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#08080d;--surface:#101018;--surface2:#16161f;--surface3:#1c1c28;
+  --border:rgba(255,255,255,.06);--border-hover:rgba(255,255,255,.12);
+  --text:#e8e8f0;--text-secondary:#9898b0;--dim:#6868808a;
+  --accent:#7c6cf0;--accent-light:#a29bfe;--accent-dim:rgba(124,108,240,.12);
+  --green:#00d4a1;--green-dim:rgba(0,212,161,.15);
+  --red:#ff6b7a;--red-dim:rgba(255,107,122,.15);
+  --yellow:#ffc93d;--yellow-dim:rgba(255,201,61,.15);
+  --orange:#ff8c42;--orange-dim:rgba(255,140,66,.15);
+  --cyan:#00d4d4;--cyan-dim:rgba(0,212,212,.12);
+  --pink:#ff79b0;
+  --radius:14px;--radius-sm:10px;--radius-xs:6px;
+  --shadow:0 4px 24px rgba(0,0,0,.3);
+  --font-body:'Inter',system-ui,-apple-system,sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+html{font-size:14px;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);min-height:100vh;overflow-x:hidden}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.15)}
+
+/* ── LAYOUT ──────────────────────────────────────────────────────────── */
+.app{display:flex;flex-direction:column;min-height:100vh}
+
+/* Header */
+header{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--surface);position:relative;z-index:10}
+header::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),var(--cyan),transparent)}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#fff;box-shadow:0 2px 12px rgba(124,108,240,.3)}
+header h1{font-size:1.25rem;font-weight:700;background:linear-gradient(135deg,var(--accent-light),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header-sub{font-size:.7rem;color:var(--text-secondary);letter-spacing:.5px;opacity:.7}
+.header-badge{font-size:.65rem;padding:3px 10px;border-radius:20px;background:var(--accent-dim);color:var(--accent-light);font-weight:600;letter-spacing:.6px;border:1px solid rgba(124,108,240,.2);margin-left:auto}
+
+/* Main Grid */
+.main{display:grid;grid-template-columns:1fr 360px;gap:0;flex:1;overflow:hidden}
+@media(max-width:960px){.main{grid-template-columns:1fr;grid-template-rows:auto 1fr}.right{max-height:50vh}}
+
+/* ── LEFT PANEL ──────────────────────────────────────────────────────── */
+.left{display:flex;flex-direction:column;overflow-y:auto;padding:20px;gap:16px}
+
+/* Upload */
+.upload-zone{border:2px dashed rgba(255,255,255,.08);border-radius:var(--radius);padding:52px 24px;text-align:center;cursor:pointer;transition:all .3s ease;background:var(--surface);position:relative;overflow:hidden}
+.upload-zone::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(124,108,240,.04),transparent 70%);transition:all .3s}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:var(--surface2)}
+.upload-zone:hover::before,.upload-zone.drag::before{background:radial-gradient(circle at 50% 50%,rgba(124,108,240,.08),transparent 70%)}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-icon{width:56px;height:56px;margin:0 auto 16px;border-radius:50%;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-size:24px;border:1px solid rgba(124,108,240,.15)}
+.upload-zone p{color:var(--text-secondary);font-size:.9rem;font-weight:500}
+.upload-zone .hint{font-size:.75rem;color:var(--dim);margin-top:8px}
+
+/* Canvas */
+.canvas-wrap{position:relative;border-radius:var(--radius);overflow:hidden;background:#000;aspect-ratio:1;max-height:580px;display:none;border:1px solid var(--border);box-shadow:var(--shadow)}
+.canvas-wrap canvas{width:100%;height:100%;display:block}
+
+/* Controls Bar */
+.controls-bar{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center;background:rgba(8,8,14,.85);backdrop-filter:blur(16px) saturate(1.5);padding:6px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.08);box-shadow:0 4px 20px rgba(0,0,0,.4)}
+.controls-bar button{background:none;border:none;color:var(--text);cursor:pointer;font-size:1rem;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:.15s}
+.controls-bar button:hover{background:rgba(255,255,255,.08)}
+.controls-bar button.active{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(124,108,240,.3)}
+.controls-bar .divider{width:1px;height:20px;background:var(--border)}
+.step-label{font-size:.75rem;color:var(--text-secondary);min-width:56px;text-align:center;font-family:var(--font-mono);font-weight:500}
+.controls-bar input[type=range]{width:100px;accent-color:var(--accent);height:4px}
+
+/* Start Location Bar */
+.start-loc-bar{display:none;align-items:center;gap:10px;padding:10px 16px;border-radius:var(--radius-sm);background:var(--surface2);border:1px solid var(--border)}
+.start-loc-bar label{font-size:.75rem;color:var(--text-secondary);font-weight:500}
+.start-loc-bar input[type=range]{flex:1;accent-color:var(--accent);height:3px}
+.start-loc-bar .val{font-size:.75rem;color:var(--accent-light);font-family:var(--font-mono);min-width:38px;text-align:right}
+.btn-rerun{background:linear-gradient(135deg,var(--accent),#6050d0);color:#fff;border:none;padding:7px 16px;border-radius:var(--radius-xs);cursor:pointer;font-size:.75rem;font-weight:600;transition:.2s;white-space:nowrap}
+.btn-rerun:hover{filter:brightness(1.15);box-shadow:0 2px 10px rgba(124,108,240,.25)}
+
+/* Pipeline */
+.pipeline{display:none}
+.pipeline h3{font-size:.7rem;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:1.2px;font-weight:600}
+.stages-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px}
+.stage-card{flex:0 0 100px;text-align:center;cursor:pointer;transition:.2s}
+.stage-card:hover{transform:translateY(-2px)}
+.stage-card img{width:100px;height:100px;object-fit:cover;border-radius:var(--radius-sm);border:2px solid transparent;transition:.25s}
+.stage-card.active img{border-color:var(--accent);box-shadow:0 0 12px rgba(124,108,240,.2)}
+.stage-card span{display:block;font-size:.65rem;color:var(--text-secondary);margin-top:5px;font-weight:500}
+
+/* Loading Overlay */
+.loading-overlay{position:absolute;inset:0;background:rgba(8,8,14,.9);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:10;backdrop-filter:blur(6px)}
+.loading-overlay.show{display:flex}
+.spinner-ring{width:48px;height:48px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay p{margin-top:14px;color:var(--text-secondary);font-size:.85rem;font-weight:500}
+.loading-overlay .dots::after{content:'';animation:dots 1.5s infinite}
+@keyframes dots{0%{content:''}33%{content:'.'}66%{content:'..'}100%{content:'...'}}
+
+/* ── RIGHT PANEL ─────────────────────────────────────────────────────── */
+.right{border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;overflow-y:auto}
+.panel-section{padding:16px 18px;border-bottom:1px solid var(--border)}
+.panel-section h3{font-size:.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:12px;font-weight:600;display:flex;align-items:center;gap:6px}
+.panel-section h3 .icon{font-size:.85rem}
+
+/* Idle */
+.idle-msg{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:48px 32px;text-align:center}
+.idle-msg .idle-icon{width:72px;height:72px;border-radius:50%;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:20px;border:1px solid rgba(124,108,240,.1);animation:pulse 3s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(124,108,240,.2)}50%{box-shadow:0 0 0 16px rgba(124,108,240,0)}}
+.idle-msg p{color:var(--text-secondary);font-size:.85rem;line-height:1.7}
+
+/* Prediction Card */
+.pred-card{display:flex;flex-direction:column;gap:14px}
+.pred-main{display:flex;align-items:center;gap:14px}
+.pred-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:800;flex-shrink:0;transition:.3s}
+.pred-label{font-size:1.35rem;font-weight:700;transition:color .3s}
+.pred-conf{font-size:.8rem;color:var(--text-secondary);margin-top:2px;font-family:var(--font-mono)}
+
+/* Probability bars */
+.prob-bars{display:flex;flex-direction:column;gap:8px}
+.prob-row{display:flex;align-items:center;gap:8px}
+.prob-name{font-size:.72rem;width:100px;color:var(--text-secondary);text-align:right;flex-shrink:0;font-weight:500}
+.prob-track{flex:1;height:8px;background:var(--surface3);border-radius:4px;overflow:hidden}
+.prob-fill{height:100%;border-radius:4px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.prob-val{font-size:.72rem;width:44px;text-align:right;font-family:var(--font-mono);color:var(--text-secondary);font-weight:500}
+
+/* Glimpse Timeline */
+.timeline{display:flex;flex-direction:column;gap:4px}
+.glimpse-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;transition:.2s;border:1px solid transparent;position:relative;overflow:hidden}
+.glimpse-row::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,var(--accent-dim),transparent);opacity:0;transition:.3s}
+.glimpse-row:hover{background:rgba(255,255,255,.02)}
+.glimpse-row.active{border-color:rgba(124,108,240,.15)}
+.glimpse-row.active::before{opacity:1}
+.glimpse-row.current{border-color:var(--accent);box-shadow:0 0 12px rgba(124,108,240,.1)}
+.glimpse-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;position:relative;z-index:1;transition:.2s}
+.glimpse-patch{width:38px;height:38px;border-radius:var(--radius-xs);object-fit:cover;border:1px solid var(--border);flex-shrink:0;position:relative;z-index:1;transition:.2s}
+.glimpse-row.current .glimpse-patch{border-color:var(--accent);box-shadow:0 0 8px rgba(124,108,240,.2)}
+.glimpse-info{flex:1;min-width:0;position:relative;z-index:1}
+.glimpse-info .coords{font-size:.72rem;font-family:var(--font-mono);font-weight:500}
+.glimpse-info .dist{font-size:.68rem;color:var(--text-secondary);margin-top:1px}
+
+/* Stats Grid */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{padding:12px;border-radius:var(--radius-sm);background:var(--surface2);border:1px solid var(--border)}
+.stat .stat-val{font-size:1.15rem;font-weight:700;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.stat .stat-label{font-size:.68rem;color:var(--text-secondary);margin-top:3px;font-weight:500}
+
+/* Distance Chart */
+.chart-wrap{width:100%;height:110px;position:relative}
+.chart-wrap canvas{width:100%;height:100%}
+
+/* ── ANIMATIONS ──────────────────────────────────────────────────────── */
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.fade-in{animation:fadeIn .35s ease both}
+.anim-delay-1{animation-delay:.05s}
+.anim-delay-2{animation-delay:.1s}
+.anim-delay-3{animation-delay:.15s}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">R</div>
+      <div>
+        <h1>RAM Agent</h1>
+        <div class="header-sub">Recurrent Attention Model for Leukemia Classification</div>
+      </div>
+    </div>
+    <span class="header-badge">ONNX RUNTIME · 8 GLIMPSES · 4 CLASSES</span>
+  </header>
+
+  <div class="main">
+    <div class="left">
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" accept="image/*" id="fileInput">
+        <div class="upload-icon">🔬</div>
+        <p>Drop a microscopy image or click to upload</p>
+        <div class="hint">Supports any resolution · JPEG · PNG · TIFF</div>
+      </div>
+
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="mainCanvas"></canvas>
+        <div class="loading-overlay" id="loader">
+          <div class="spinner-ring"></div>
+          <p>Agent is thinking<span class="dots"></span></p>
+        </div>
+        <div class="controls-bar">
+          <button id="btnFirst" title="First (Home)">⏮</button>
+          <button id="btnPrev" title="Previous (←)">◀</button>
+          <button id="btnPlay" title="Play/Pause (Space)">▶</button>
+          <button id="btnNext" title="Next (→)">▶</button>
+          <button id="btnLast" title="Last (End)">⏭</button>
+          <div class="divider"></div>
+          <input type="range" id="stepSlider" min="0" max="7" value="7" step="1">
+          <span class="step-label" id="stepLabel">8 / 8</span>
+          <div class="divider"></div>
+          <button id="btnToggleMode" title="Toggle padded view">🔲</button>
+        </div>
+      </div>
+
+      <div class="start-loc-bar" id="startLocBar">
+        <label>Start X</label>
+        <input type="range" id="startX" min="-100" max="100" value="0" step="1">
+        <span class="val" id="startXVal">0.00</span>
+        <label>Start Y</label>
+        <input type="range" id="startY" min="-100" max="100" value="0" step="1">
+        <span class="val" id="startYVal">0.00</span>
+        <button class="btn-rerun" id="btnRerun">Re-run ↻</button>
+      </div>
+
+      <div class="pipeline" id="pipeline">
+        <h3>🔬 Preprocessing Pipeline</h3>
+        <div class="stages-row" id="stagesRow"></div>
+      </div>
+    </div>
+
+    <div class="right" id="rightPanel">
+      <div class="idle-msg" id="idleMsg">
+        <div class="idle-icon">🧠</div>
+        <p>Upload a blood smear image to watch<br>the RAM agent's attention unfold<br><br>
+        <span style="font-size:.75rem;opacity:.6">The agent takes 8 sequential glimpses,<br>building understanding step by step</span></p>
+      </div>
+
+      <div class="panel-section fade-in" id="predSection" style="display:none">
+        <h3><span class="icon">🎯</span> Prediction</h3>
+        <div class="pred-card">
+          <div class="pred-main">
+            <div class="pred-icon" id="predIcon">?</div>
+            <div>
+              <div class="pred-label" id="predLabel">—</div>
+              <div class="pred-conf" id="predConf">—</div>
+            </div>
+          </div>
+          <div class="prob-bars" id="probBars"></div>
+        </div>
+      </div>
+
+      <div class="panel-section fade-in anim-delay-1" id="timelineSection" style="display:none">
+        <h3><span class="icon">👁</span> Glimpse Timeline</h3>
+        <div class="timeline" id="timeline"></div>
+      </div>
+
+      <div class="panel-section fade-in anim-delay-2" id="chartSection" style="display:none">
+        <h3><span class="icon">📊</span> Movement Profile</h3>
+        <div class="chart-wrap">
+          <canvas id="chartCanvas"></canvas>
+        </div>
+      </div>
+
+      <div class="panel-section fade-in anim-delay-3" id="statsSection" style="display:none">
+        <h3><span class="icon">⚡</span> Agent Stats</h3>
+        <div class="stats-grid" id="statsGrid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   RAM Agent Frontend
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const S = {
+  result: null, step: 7, playing: false, playTimer: null,
+  bgStage: 'resized', uploadedFile: null, bgImage: null,
+};
+
+const $ = id => document.getElementById(id);
+const COLORS = ['#7c6cf0','#a29bfe','#00d4d4','#00d4a1','#ffc93d','#ff8c42','#ff79b0','#ff6b7a'];
+const gc = i => COLORS[i % COLORS.length];
+
+// ── Upload ───────────────────────────────────────────────────────────────────
+const uploadZone = $('uploadZone'), fileInput = $('fileInput');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('drag');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+function handleFile(f) { S.uploadedFile = f; runPrediction(); }
+
+async function runPrediction() {
+  if (!S.uploadedFile) return;
+  stopPlay();
+  $('loader').classList.add('show');
+  $('canvasWrap').style.display = 'block';
+  $('startLocBar').style.display = 'flex';
+  const form = new FormData();
+  form.append('file', S.uploadedFile);
+  const sx = parseInt($('startX').value) / 100;
+  const sy = parseInt($('startY').value) / 100;
+  try {
+    const r = await fetch(`/api/predict?start_x=${sx}&start_y=${sy}`, { method: 'POST', body: form });
+    S.result = await r.json();
+    S.step = S.result.glimpses.count - 1;
+    $('stepSlider').max = S.result.glimpses.count - 1;
+    $('stepSlider').value = S.step;
+    onResult();
+  } catch (e) { console.error(e); } finally { $('loader').classList.remove('show'); }
+}
+
+$('startX').addEventListener('input', () => $('startXVal').textContent = (parseInt($('startX').value)/100).toFixed(2));
+$('startY').addEventListener('input', () => $('startYVal').textContent = (parseInt($('startY').value)/100).toFixed(2));
+$('btnRerun').addEventListener('click', runPrediction);
+
+// ── Result ───────────────────────────────────────────────────────────────────
+function onResult() {
+  const d = S.result;
+  $('idleMsg').style.display = 'none';
+  ['predSection','timelineSection','chartSection','statsSection'].forEach(id => $(id).style.display = '');
+  const img = new Image();
+  img.onload = () => { S.bgImage = img; drawCanvas(); };
+  img.src = 'data:image/jpeg;base64,' + d.stages.resized;
+  S.bgStage = 'resized';
+  renderPrediction(d.prediction);
+  renderTimeline(d.glimpses);
+  renderChart(d);
+  renderStats(d);
+  renderPipeline(d.stages);
+  $('pipeline').style.display = '';
+  setTimeout(togglePlay, 400);
+}
+
+// ── Prediction ───────────────────────────────────────────────────────────────
+function renderPrediction(pred) {
+  const cmap = {
+    'Benign':['var(--green)','var(--green-dim)','✓'],
+    'Early Pre-B ALL':['var(--yellow)','var(--yellow-dim)','E'],
+    'Pre-B ALL':['var(--orange)','var(--orange-dim)','P'],
+    'Pro-B ALL':['var(--red)','var(--red-dim)','P⁺']
+  };
+  const [c, bg, icon] = cmap[pred.class] || ['var(--accent)','var(--accent-dim)','?'];
+  $('predIcon').style.background = bg; $('predIcon').style.color = c; $('predIcon').textContent = icon;
+  $('predLabel').textContent = pred.class; $('predLabel').style.color = c;
+  $('predConf').textContent = `${(pred.confidence * 100).toFixed(1)}% confidence`;
+  const bars = $('probBars'); bars.innerHTML = '';
+  const colorMap = {'Benign':'var(--green)','Early Pre-B ALL':'var(--yellow)','Pre-B ALL':'var(--orange)','Pro-B ALL':'var(--red)'};
+  for (const [name, val] of Object.entries(pred.probabilities)) {
+    const cl = colorMap[name] || 'var(--accent)';
+    const row = document.createElement('div'); row.className = 'prob-row';
+    row.innerHTML = `<span class="prob-name">${name}</span>
+      <div class="prob-track"><div class="prob-fill" style="width:0%;background:${cl}"></div></div>
+      <span class="prob-val">${(val*100).toFixed(1)}%</span>`;
+    bars.appendChild(row);
+    requestAnimationFrame(() => requestAnimationFrame(() => { row.querySelector('.prob-fill').style.width = (val * 100) + '%'; }));
+  }
+}
+
+// ── Timeline ─────────────────────────────────────────────────────────────────
+function renderTimeline(g) {
+  const tl = $('timeline'); tl.innerHTML = '';
+  for (let i = 0; i < g.count; i++) {
+    const c = gc(i), loc = g.locations_norm[i], dist = g.distances[i];
+    const row = document.createElement('div');
+    row.className = 'glimpse-row'; row.dataset.idx = i;
+    row.innerHTML = `
+      <div class="glimpse-num" style="background:${c}22;color:${c}">${i+1}</div>
+      <img class="glimpse-patch" src="data:image/png;base64,${g.patches_b64[i]}">
+      <div class="glimpse-info">
+        <div class="coords" style="color:${c}">(${loc.x.toFixed(3)}, ${loc.y.toFixed(3)})</div>
+        <div class="dist">${i===0 ? '● start' : '→ moved ' + dist.toFixed(3)}</div>
+      </div>`;
+    row.addEventListener('click', () => { S.step = i; $('stepSlider').value = i; stopPlay(); updateStep(); });
+    tl.appendChild(row);
+  }
+  highlightTimeline();
+}
+
+function highlightTimeline() {
+  document.querySelectorAll('.glimpse-row').forEach(r => {
+    const idx = +r.dataset.idx;
+    r.classList.toggle('active', idx <= S.step);
+    r.classList.toggle('current', idx === S.step);
+  });
+  const cur = document.querySelector('.glimpse-row.current');
+  if (cur) cur.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+// ── Chart ────────────────────────────────────────────────────────────────────
+function renderChart(d) {
+  const cc = $('chartCanvas'), dpr = window.devicePixelRatio || 1;
+  const rect = cc.parentElement.getBoundingClientRect();
+  cc.width = rect.width * dpr; cc.height = rect.height * dpr;
+  const cx = cc.getContext('2d'); cx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  cx.clearRect(0, 0, W, H);
+  const dists = d.glimpses.distances, maxD = Math.max(...dists, 0.01) * 1.15;
+  const pad = { l: 28, r: 8, t: 8, b: 22 }, pW = W - pad.l - pad.r, pH = H - pad.t - pad.b;
+  cx.strokeStyle = 'rgba(255,255,255,.04)'; cx.lineWidth = 1;
+  for (let i = 0; i <= 3; i++) { const y = pad.t + pH * i / 3; cx.beginPath(); cx.moveTo(pad.l, y); cx.lineTo(W - pad.r, y); cx.stroke(); }
+  const gap = pW / dists.length, barW = gap * 0.55;
+  dists.forEach((v, i) => {
+    const x = pad.l + gap * i + (gap - barW) / 2, h = (v / maxD) * pH, y = pad.t + pH - h;
+    const active = i <= S.step;
+    if (active) { const grad = cx.createLinearGradient(x, y, x, y + h); grad.addColorStop(0, gc(i)); grad.addColorStop(1, gc(i) + '44'); cx.fillStyle = grad; }
+    else cx.fillStyle = 'rgba(255,255,255,.06)';
+    const r = 3; cx.beginPath();
+    if (h > r * 2) { cx.moveTo(x + r, y); cx.lineTo(x + barW - r, y); cx.arcTo(x + barW, y, x + barW, y + r, r); cx.lineTo(x + barW, y + h); cx.lineTo(x, y + h); cx.lineTo(x, y + r); cx.arcTo(x, y, x + r, y, r); }
+    else cx.rect(x, y, barW, Math.max(h, 1));
+    cx.fill();
+    if (active && v > 0) { cx.fillStyle = gc(i); cx.font = '500 9px "JetBrains Mono",monospace'; cx.textAlign = 'center'; cx.fillText(v.toFixed(2), x + barW/2, y - 4); }
+  });
+  cx.font = '500 10px "JetBrains Mono",monospace'; cx.textAlign = 'center';
+  dists.forEach((_, i) => { cx.fillStyle = i <= S.step ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.15)'; cx.fillText(i + 1, pad.l + gap * i + gap/2, H - 5); });
+}
+
+// ── Stats ────────────────────────────────────────────────────────────────────
+function renderStats(d) {
+  const g = d.glimpses, m = d.meta;
+  const cov = estimateCoverage(g.locations_norm, 96/512);
+  const stats = [
+    { val: g.count, label: 'Glimpses' }, { val: `${g.patch_size}px`, label: 'Patch Size' },
+    { val: g.total_distance.toFixed(2), label: 'Total Distance' }, { val: `${m.inference_ms}ms`, label: 'Inference Time' },
+    { val: m.original_size.join(' × '), label: 'Original Size' }, { val: `${(cov * 100).toFixed(0)}%`, label: 'Area Coverage' },
+  ];
+  const grid = $('statsGrid'); grid.innerHTML = '';
+  stats.forEach(s => { const el = document.createElement('div'); el.className = 'stat'; el.innerHTML = `<div class="stat-val">${s.val}</div><div class="stat-label">${s.label}</div>`; grid.appendChild(el); });
+}
+function estimateCoverage(locs, boxRatio) {
+  const grid = 20, seen = new Set(), half = boxRatio / 2;
+  for (const loc of locs) {
+    const cx = (loc.x + 1) / 2, cy = (loc.y + 1) / 2;
+    for (let gy = Math.max(0, Math.floor((cy - half) * grid)); gy < Math.min(grid, Math.ceil((cy + half) * grid)); gy++)
+      for (let gx = Math.max(0, Math.floor((cx - half) * grid)); gx < Math.min(grid, Math.ceil((cx + half) * grid)); gx++)
+        seen.add(gy * grid + gx);
+  }
+  return seen.size / (grid * grid);
+}
+
+// ── Pipeline ─────────────────────────────────────────────────────────────────
+function renderPipeline(stages) {
+  const row = $('stagesRow'); row.innerHTML = '';
+  [['original','Original'],['resized','Resized'],['grayscale','Grayscale'],['clipped','Pct Clip'],['sobel','Sobel Edge'],['padded','Padded 512²']].forEach(([key, label]) => {
+    if (!stages[key]) return;
+    const card = document.createElement('div'); card.className = 'stage-card' + (key === S.bgStage ? ' active' : '');
+    const mime = ['original','resized'].includes(key) ? 'jpeg' : 'png';
+    card.innerHTML = `<img src="data:image/${mime};base64,${stages[key]}"><span>${label}</span>`;
+    card.addEventListener('click', () => {
+      S.bgStage = key; document.querySelectorAll('.stage-card').forEach(c => c.classList.remove('active')); card.classList.add('active');
+      const img2 = new Image(); img2.onload = () => { S.bgImage = img2; drawCanvas(); };
+      img2.src = `data:image/${mime};base64,${stages[key]}`;
+    });
+    row.appendChild(card);
+  });
+}
+
+// ── Canvas ───────────────────────────────────────────────────────────────────
+function drawCanvas() {
+  if (!S.result || !S.bgImage) return;
+  const d = S.result, dpr = window.devicePixelRatio || 1;
+  const isPadded = S.bgStage === 'padded';
+  const fullSize = isPadded ? 512 : 224;
+  const rect = $('canvasWrap').getBoundingClientRect();
+  const size = Math.min(rect.width, rect.height);
+  const canvas = $('mainCanvas');
+  canvas.width = size * dpr; canvas.height = size * dpr;
+  canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const scale = size / fullSize;
+
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, size, size);
+  ctx.drawImage(S.bgImage, 0, 0, size, size);
+  ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(0, 0, size, size);
+
+  const locs = isPadded ? d.glimpses.locations_pixel : d.glimpses.locations_content;
+  const boxSize = isPadded ? d.glimpses.patch_size : d.glimpses.box_content_px;
+  const halfBox = boxSize / 2;
+
+  // Dashed path
+  ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
+  for (let i = 0; i < S.step; i++) {
+    const from = locs[i], to = locs[i+1];
+    ctx.strokeStyle = gc(i) + '55';
+    ctx.beginPath(); ctx.moveTo(from.x * scale, from.y * scale); ctx.lineTo(to.x * scale, to.y * scale); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Arrows
+  for (let i = 0; i < S.step; i++) {
+    const from = locs[i], to = locs[i+1];
+    const x1 = from.x * scale, y1 = from.y * scale, x2 = to.x * scale, y2 = to.y * scale;
+    const angle = Math.atan2(y2 - y1, x2 - x1), len = 7;
+    ctx.fillStyle = gc(i + 1) + '99';
+    ctx.beginPath(); ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - len * Math.cos(angle - .35), y2 - len * Math.sin(angle - .35));
+    ctx.lineTo(x2 - len * Math.cos(angle + .35), y2 - len * Math.sin(angle + .35));
+    ctx.closePath(); ctx.fill();
+  }
+
+  // Boxes
+  for (let i = 0; i <= S.step; i++) {
+    const loc = locs[i], px = loc.x * scale, py = loc.y * scale;
+    const bx = (loc.x - halfBox) * scale, by = (loc.y - halfBox) * scale, bs = boxSize * scale;
+    const c = gc(i), isCur = i === S.step;
+
+    if (isCur) { ctx.shadowColor = c; ctx.shadowBlur = 16; }
+    ctx.fillStyle = c + (isCur ? '20' : '0a');
+    ctx.beginPath(); ctx.rect(bx, by, bs, bs); ctx.fill();
+    ctx.strokeStyle = c + (isCur ? 'dd' : '55'); ctx.lineWidth = isCur ? 2.5 : 1;
+    ctx.beginPath(); ctx.rect(bx, by, bs, bs); ctx.stroke();
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+
+    // Badge
+    const br = isCur ? 11 : 8;
+    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(bx + br + 2, by + br + 2, br, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = `bold ${isCur ? 10 : 8}px Inter,system-ui`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(i + 1, bx + br + 2, by + br + 2.5);
+
+    if (isCur) {
+      ctx.strokeStyle = c + 'aa'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(px - 6, py); ctx.lineTo(px + 6, py); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(px, py - 6); ctx.lineTo(px, py + 6); ctx.stroke();
+      ctx.fillStyle = c; ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  $('stepLabel').textContent = `${S.step + 1} / ${d.glimpses.count}`;
+}
+
+// ── Step ─────────────────────────────────────────────────────────────────────
+function updateStep() { drawCanvas(); highlightTimeline(); if (S.result) renderChart(S.result); }
+
+// ── Playback ─────────────────────────────────────────────────────────────────
+$('stepSlider').addEventListener('input', () => { S.step = +$('stepSlider').value; stopPlay(); updateStep(); });
+$('btnFirst').addEventListener('click', () => { S.step = 0; $('stepSlider').value = 0; stopPlay(); updateStep(); });
+$('btnLast').addEventListener('click', () => { if (!S.result) return; S.step = S.result.glimpses.count - 1; $('stepSlider').value = S.step; stopPlay(); updateStep(); });
+$('btnPrev').addEventListener('click', () => { if (S.step > 0) { S.step--; $('stepSlider').value = S.step; stopPlay(); updateStep(); } });
+$('btnNext').addEventListener('click', () => { if (S.result && S.step < S.result.glimpses.count - 1) { S.step++; $('stepSlider').value = S.step; stopPlay(); updateStep(); } });
+$('btnPlay').addEventListener('click', togglePlay);
+
+function togglePlay() {
+  if (S.playing) return stopPlay();
+  S.playing = true; $('btnPlay').textContent = '⏸'; $('btnPlay').classList.add('active');
+  if (S.step >= (S.result?.glimpses.count || 8) - 1) S.step = -1;
+  playTick();
+}
+function stopPlay() { S.playing = false; $('btnPlay').textContent = '▶'; $('btnPlay').classList.remove('active'); clearTimeout(S.playTimer); }
+function playTick() {
+  if (!S.playing || !S.result) return;
+  if (S.step < S.result.glimpses.count - 1) { S.step++; $('stepSlider').value = S.step; updateStep(); S.playTimer = setTimeout(playTick, 550); }
+  else stopPlay();
+}
+
+$('btnToggleMode').addEventListener('click', () => {
+  S.bgStage = S.bgStage === 'padded' ? 'resized' : 'padded';
+  if (S.result) {
+    const mime = ['original','resized'].includes(S.bgStage) ? 'jpeg' : 'png';
+    const img = new Image(); img.onload = () => { S.bgImage = img; drawCanvas(); };
+    img.src = `data:image/${mime};base64,${S.result.stages[S.bgStage]}`;
+    document.querySelectorAll('.stage-card').forEach(c => c.classList.remove('active'));
+  }
+});
+
+// ── Keys + Resize ────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') $('btnPrev').click();
+  else if (e.key === 'ArrowRight') $('btnNext').click();
+  else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  else if (e.key === 'Home') $('btnFirst').click();
+  else if (e.key === 'End') $('btnLast').click();
+});
+window.addEventListener('resize', () => { if (S.result) { drawCanvas(); renderChart(S.result); } });
+</script>
+</body>
+</html>

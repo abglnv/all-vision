@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install deploy dependencies
+COPY deploy/requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the source ONNX model (dynamic patch is generated at runtime)
+COPY ram_agent.onnx ram_agent.onnx
+
+# Copy deploy package
+COPY deploy/ deploy/
+
+EXPOSE 7860
+
+CMD ["python", "-m", "uvicorn", "deploy.server:app", "--host", "0.0.0.0", "--port", "7860"]
